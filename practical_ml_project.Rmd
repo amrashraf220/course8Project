@@ -1,0 +1,122 @@
+---
+title: "Course8_project"
+author: "Amr Ashraf"
+date: "May 24, 2018"
+output: html_document
+---
+```{r}
+knitr::opts_chunk$set(echo = TRUE, warning=FALSE, message=FALSE, fig.width=10, fig.height=5)
+options(width=120)
+```
+
+## Executive Summary
+In this project, Our goal will be to use data from accelerometers on the belt. 
+forearm, arm, and dumbell of 6 participants.The goal of project is predicting the manner in which they did the exercise.
+This is the "classe" variable in the training set. 
+We should create a report describing how we built your model, how we used cross validation, what we think the expected out of sample error is,
+and why we made the choices you did. we will also use we prediction model to predict 20 different test cases. Based on a dataset provide by HAR http://groupware.les.inf.puc-rio.br/har we will try to train a predictive model to predict what exercise was performed using a dataset with 159 features
+
+## Loading Libraries
+
+```{r}
+library(corrplot)
+library(rpart.plot)
+library(randomForest)
+library(caret)
+library(rpart)
+
+```
+
+## Downloading and Reading the Data
+
+```{r}
+trainUrl <-"https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+testUrl <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+trainFile <- "./data/pml-training.csv"
+testFile  <- "./data/pml-testing.csv"
+if (!file.exists("./data")) {
+  dir.create("./data")
+}
+if (!file.exists(trainFile)) {
+  download.file(trainUrl, destfile=trainFile)
+}
+if (!file.exists(testFile)) {
+  download.file(testUrl, destfile=testFile)
+}
+trainRaw <- read.csv("./data/pml-training.csv")
+testRaw <- read.csv("./data/pml-testing.csv")
+```
+
+## Exploring the data set
+
+```{r}
+dim(trainRaw)
+dim(testRaw)
+#The training data set contains 19622 observations and 160 variables, while the testing data set contains 20 observations and 160 variables. The "classe" variable in the training set is the outcome to predict.
+
+```
+
+## Cleaning the data by removing NA values and removing the non contributing variables
+
+```{r}
+trainRaw <- trainRaw[, colSums(is.na(trainRaw)) == 0] 
+testRaw <- testRaw[, colSums(is.na(testRaw)) == 0] 
+
+classe <- trainRaw$classe
+trainRemove <- grepl("^X|timestamp|window", names(trainRaw))
+trainRaw <- trainRaw[, !trainRemove]
+trainCleaned <- trainRaw[, sapply(trainRaw, is.numeric)]
+trainCleaned$classe <- classe
+testRemove <- grepl("^X|timestamp|window", names(testRaw))
+testRaw <- testRaw[, !testRemove]
+testCleaned <- testRaw[, sapply(testRaw, is.numeric)]
+#Now, the cleaned training data set contains 19622 observations and 53 variables, while the testing data set contains 20 observations and 53 variables. The "classe" variable is still in the cleaned training set.
+```
+
+## Creating the training and testing sets
+
+```{r}
+set.seed(24-4-2018) # For reproducibility
+inTrain <- createDataPartition(trainCleaned$classe, p=0.70, list=F)
+trainData <- trainCleaned[inTrain, ]
+testData <- trainCleaned[-inTrain, ]
+```
+
+## Modelling
+I choose to use Random forest , and we will use 5-fold cross validation
+
+```{r}
+controlRf <- trainControl(method="cv", 5)
+modelRf <- train(classe ~ ., data=trainData, method="rf", trControl=controlRf, ntree=250)
+modelRf
+
+predictRf <- predict(modelRf, testData)
+confusionMatrix(testData$classe, predictRf)
+
+accuracy <- postResample(predictRf, testData$classe)
+accuracy
+oose <- 1 - as.numeric(confusionMatrix(testData$classe, predictRf)$overall[1])
+oose
+#So, the estimated accuracy of the model is 99.42% and the estimated out-of-sample error is 0.58%.
+```
+
+## Applying on test set
+
+```{r}
+result <- predict(modelRf, testCleaned[, -length(names(testCleaned))])
+result
+```
+
+## Figures
+
+```{r}
+#Decision Tree Visualization
+treeModel <- rpart(classe ~ ., data=trainData, method="class")
+prp(treeModel) 
+
+#Correlation Matrix Visualization
+corrPlot <- cor(trainData[, -length(names(trainData))])
+corrplot(corrPlot, method="color")
+
+
+```
